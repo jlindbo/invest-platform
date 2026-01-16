@@ -1,0 +1,345 @@
+// J Group Invest Corp - Prisma Schema
+// Norwegian Stock Market Prediction Platform
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================
+// Companies and Stock Data
+// ============================================
+
+model Company {
+  id              Int                  @id @default(autoincrement())
+  ticker          String               @unique @db.VarChar(20)
+  name            String               @db.VarChar(255)
+  sector          String?              @db.VarChar(100)
+  industry        String?              @db.VarChar(100)
+  marketCap       BigInt?              @map("market_cap")
+  isTracked       Boolean              @default(false) @map("is_tracked")
+  isTarget        Boolean              @default(false) @map("is_target")
+  createdAt       DateTime             @default(now()) @map("created_at")
+  updatedAt       DateTime             @updatedAt @map("updated_at")
+
+  // Relations
+  stockPrices     StockPrice[]
+  indicators      TechnicalIndicator[]
+  predictions     Prediction[]
+  opportunities   Opportunity[]
+  newsCompanies   NewsCompany[]
+  alerts          Alert[]
+  trades          TradingSimulation[]
+
+  @@map("companies")
+}
+
+model StockPrice {
+  id             Int       @id @default(autoincrement())
+  companyId      Int       @map("company_id")
+  date           DateTime  @db.Date
+  open           Decimal   @db.Decimal(10, 2)
+  high           Decimal   @db.Decimal(10, 2)
+  low            Decimal   @db.Decimal(10, 2)
+  close          Decimal   @db.Decimal(10, 2)
+  volume         BigInt
+  adjustedClose  Decimal?  @map("adjusted_close") @db.Decimal(10, 2)
+  createdAt      DateTime  @default(now()) @map("created_at")
+
+  // Relations
+  company        Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@unique([companyId, date])
+  @@index([companyId, date(sort: Desc)])
+  @@map("stock_prices")
+}
+
+model TechnicalIndicator {
+  id               Int       @id @default(autoincrement())
+  companyId        Int       @map("company_id")
+  date             DateTime  @db.Date
+  rsi14            Decimal?  @map("rsi_14") @db.Decimal(5, 2)
+  macd             Decimal?  @db.Decimal(10, 4)
+  macdSignal       Decimal?  @map("macd_signal") @db.Decimal(10, 4)
+  macdHistogram    Decimal?  @map("macd_histogram") @db.Decimal(10, 4)
+  sma20            Decimal?  @map("sma_20") @db.Decimal(10, 2)
+  sma50            Decimal?  @map("sma_50") @db.Decimal(10, 2)
+  sma200           Decimal?  @map("sma_200") @db.Decimal(10, 2)
+  ema12            Decimal?  @map("ema_12") @db.Decimal(10, 2)
+  ema26            Decimal?  @map("ema_26") @db.Decimal(10, 2)
+  bollingerUpper   Decimal?  @map("bollinger_upper") @db.Decimal(10, 2)
+  bollingerMiddle  Decimal?  @map("bollinger_middle") @db.Decimal(10, 2)
+  bollingerLower   Decimal?  @map("bollinger_lower") @db.Decimal(10, 2)
+  stochasticK      Decimal?  @map("stochastic_k") @db.Decimal(5, 2)
+  stochasticD      Decimal?  @map("stochastic_d") @db.Decimal(5, 2)
+  atr14            Decimal?  @map("atr_14") @db.Decimal(10, 4)
+  adx14            Decimal?  @map("adx_14") @db.Decimal(5, 2)
+  createdAt        DateTime  @default(now()) @map("created_at")
+
+  // Relations
+  company          Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@unique([companyId, date])
+  @@index([companyId, date(sort: Desc)])
+  @@map("technical_indicators")
+}
+
+// ============================================
+// News and Sentiment
+// ============================================
+
+model NewsSource {
+  id             Int              @id @default(autoincrement())
+  name           String           @unique @db.VarChar(100)
+  url            String           @db.VarChar(500)
+  scraperType    String?          @map("scraper_type") @db.VarChar(50)
+  isActive       Boolean          @default(true) @map("is_active")
+  lastScrapedAt  DateTime?        @map("last_scraped_at")
+  createdAt      DateTime         @default(now()) @map("created_at")
+
+  // Relations
+  articles       NewsArticle[]
+  scrapingLogs   ScrapingLog[]
+
+  @@map("news_sources")
+}
+
+model NewsArticle {
+  id                   Int             @id @default(autoincrement())
+  sourceId             Int?            @map("source_id")
+  title                String          @db.Text
+  content              String?         @db.Text
+  summary              String?         @db.Text
+  url                  String          @unique @db.VarChar(1000)
+  author               String?         @db.VarChar(255)
+  publishedAt          DateTime        @map("published_at")
+  scrapedAt            DateTime        @default(now()) @map("scraped_at")
+  language             String          @default("no") @db.VarChar(10)
+  sentimentScore       Decimal?        @map("sentiment_score") @db.Decimal(3, 2)
+  sentimentLabel       String?         @map("sentiment_label") @db.VarChar(20)
+  sentimentConfidence  Decimal?        @map("sentiment_confidence") @db.Decimal(3, 2)
+  createdAt            DateTime        @default(now()) @map("created_at")
+
+  // Relations
+  source               NewsSource?     @relation(fields: [sourceId], references: [id])
+  newsCompanies        NewsCompany[]
+
+  @@index([publishedAt(sort: Desc)])
+  @@index([sentimentScore])
+  @@map("news_articles")
+}
+
+model NewsCompany {
+  newsId         Int       @map("news_id")
+  companyId      Int       @map("company_id")
+  relevanceScore Decimal?  @map("relevance_score") @db.Decimal(3, 2)
+
+  // Relations
+  news           NewsArticle @relation(fields: [newsId], references: [id], onDelete: Cascade)
+  company        Company     @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@id([newsId, companyId])
+  @@index([companyId, newsId])
+  @@map("news_companies")
+}
+
+// ============================================
+// ML Models and Predictions
+// ============================================
+
+model MlModel {
+  id                   Int          @id @default(autoincrement())
+  name                 String       @db.VarChar(100)
+  version              String       @db.VarChar(50)
+  modelType            String       @map("model_type") @db.VarChar(50)
+  architecture         Json?
+  hyperparameters      Json?
+  trainingDate         DateTime     @map("training_date")
+  trainingDataStart    DateTime?    @map("training_data_start") @db.Date
+  trainingDataEnd      DateTime?    @map("training_data_end") @db.Date
+  validationAccuracy   Decimal?     @map("validation_accuracy") @db.Decimal(5, 4)
+  validationLoss       Decimal?     @map("validation_loss") @db.Decimal(10, 6)
+  testMetrics          Json?        @map("test_metrics")
+  filePath             String?      @map("file_path") @db.VarChar(500)
+  isActive             Boolean      @default(false) @map("is_active")
+  createdAt            DateTime     @default(now()) @map("created_at")
+
+  // Relations
+  predictions          Prediction[]
+  performance          ModelPerformance[]
+
+  @@unique([name, version])
+  @@map("ml_models")
+}
+
+model Prediction {
+  id                     Int       @id @default(autoincrement())
+  companyId              Int       @map("company_id")
+  modelId                Int?      @map("model_id")
+  predictionDate         DateTime  @map("prediction_date") @db.Date
+  targetDate             DateTime  @map("target_date") @db.Date
+  predictedDirection     String    @map("predicted_direction") @db.VarChar(10)
+  confidence             Decimal   @db.Decimal(5, 4)
+  predictedPrice         Decimal?  @map("predicted_price") @db.Decimal(10, 2)
+  predictedChangePercent Decimal?  @map("predicted_change_percent") @db.Decimal(5, 2)
+  featuresUsed           Json?     @map("features_used")
+  actualDirection        String?   @map("actual_direction") @db.VarChar(10)
+  actualPrice            Decimal?  @map("actual_price") @db.Decimal(10, 2)
+  actualChangePercent    Decimal?  @map("actual_change_percent") @db.Decimal(5, 2)
+  isCorrect              Boolean?  @map("is_correct")
+  // Enhanced accuracy metrics
+  confidenceWeightedScore Decimal? @map("confidence_weighted_score") @db.Decimal(5, 4) // Confidence * isCorrect
+  priceErrorPercent       Decimal? @map("price_error_percent") @db.Decimal(5, 2) // MAPE: |predicted - actual| / actual
+  tradingReturn           Decimal? @map("trading_return") @db.Decimal(6, 2) // Return if traded on this prediction
+  createdAt              DateTime  @default(now()) @map("created_at")
+
+  // Relations
+  company                Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  model                  MlModel?  @relation(fields: [modelId], references: [id])
+
+  @@index([companyId, targetDate(sort: Desc)])
+  @@index([modelId])
+  @@index([isCorrect])
+  @@map("predictions")
+}
+
+model ModelPerformance {
+  id                    Int       @id @default(autoincrement())
+  modelId               Int       @map("model_id")
+  evaluationDate        DateTime  @map("evaluation_date") @db.Date
+  accuracy              Decimal?  @db.Decimal(5, 4)
+  precision             Decimal?  @db.Decimal(5, 4)
+  recall                Decimal?  @db.Decimal(5, 4)
+  f1Score               Decimal?  @map("f1_score") @db.Decimal(5, 4)
+  aucRoc                Decimal?  @map("auc_roc") @db.Decimal(5, 4)
+  truePositives         Int?      @map("true_positives")
+  trueNegatives         Int?      @map("true_negatives")
+  falsePositives        Int?      @map("false_positives")
+  falseNegatives        Int?      @map("false_negatives")
+  evaluationPeriodStart DateTime? @map("evaluation_period_start") @db.Date
+  evaluationPeriodEnd   DateTime? @map("evaluation_period_end") @db.Date
+  createdAt             DateTime  @default(now()) @map("created_at")
+
+  // Relations
+  model                 MlModel   @relation(fields: [modelId], references: [id])
+
+  @@index([modelId, evaluationDate(sort: Desc)])
+  @@map("model_performance")
+}
+
+// ============================================
+// Opportunities and Alerts
+// ============================================
+
+model Opportunity {
+  id                 Int       @id @default(autoincrement())
+  companyId          Int       @map("company_id")
+  detectedAt         DateTime  @default(now()) @map("detected_at")
+  opportunityType    String    @map("opportunity_type") @db.VarChar(50)
+  score              Decimal   @db.Decimal(5, 2)
+  description        String?   @db.Text
+  triggerConditions  Json?     @map("trigger_conditions")
+  predictedDirection String?   @map("predicted_direction") @db.VarChar(10)
+  confidence         Decimal?  @db.Decimal(5, 4)
+  status             String    @default("active") @db.VarChar(20)
+  expiresAt          DateTime? @map("expires_at")
+  outcome            String?   @db.VarChar(20)
+  createdAt          DateTime  @default(now()) @map("created_at")
+
+  // Relations
+  company            Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@index([companyId, detectedAt(sort: Desc)])
+  @@index([status])
+  @@map("opportunities")
+}
+
+model Alert {
+  id               Int       @id @default(autoincrement())
+  companyId        Int?      @map("company_id")
+  alertType        String    @map("alert_type") @db.VarChar(50)
+  condition        Json
+  isActive         Boolean   @default(true) @map("is_active")
+  lastTriggeredAt  DateTime? @map("last_triggered_at")
+  createdAt        DateTime  @default(now()) @map("created_at")
+
+  // Relations
+  company          Company?  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@map("alerts")
+}
+
+model TradingSimulation {
+  id                   Int       @id @default(autoincrement())
+  predictionId         Int       @map("prediction_id")
+  companyId            Int       @map("company_id")
+  tradeDate            DateTime  @map("trade_date") @db.Date
+  tradeType            String    @map("trade_type") @db.VarChar(10) // 'BUY' or 'SELL'
+  entryPrice           Decimal   @map("entry_price") @db.Decimal(10, 2)
+  exitPrice            Decimal?  @map("exit_price") @db.Decimal(10, 2)
+  shares               Int       // Number of shares traded
+  positionSize         Decimal   @map("position_size") @db.Decimal(10, 2) // Total value
+  confidence           Decimal   @db.Decimal(5, 4) // Prediction confidence
+  returnPercent        Decimal?  @map("return_percent") @db.Decimal(6, 2)
+  returnAmount         Decimal?  @map("return_amount") @db.Decimal(10, 2)
+  fees                 Decimal   @default(0) @db.Decimal(8, 2)
+  netReturn            Decimal?  @map("net_return") @db.Decimal(10, 2)
+  isOpen               Boolean   @default(true) @map("is_open")
+  closedAt             DateTime? @map("closed_at")
+  createdAt            DateTime  @default(now()) @map("created_at")
+
+  // Relations
+  company              Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@index([companyId, tradeDate(sort: Desc)])
+  @@index([isOpen])
+  @@map("trading_simulations")
+}
+
+model PortfolioSnapshot {
+  id                   Int       @id @default(autoincrement())
+  snapshotDate         DateTime  @map("snapshot_date") @db.Date
+  totalValue           Decimal   @map("total_value") @db.Decimal(12, 2)
+  cashBalance          Decimal   @map("cash_balance") @db.Decimal(12, 2)
+  investedAmount       Decimal   @map("invested_amount") @db.Decimal(12, 2)
+  totalReturn          Decimal   @map("total_return") @db.Decimal(12, 2)
+  totalReturnPercent   Decimal   @map("total_return_percent") @db.Decimal(6, 2)
+  openPositions        Int       @map("open_positions")
+  totalTrades          Int       @map("total_trades")
+  winningTrades        Int       @map("winning_trades")
+  losingTrades         Int       @map("losing_trades")
+  winRate              Decimal   @map("win_rate") @db.Decimal(5, 2)
+  sharpeRatio          Decimal?  @map("sharpe_ratio") @db.Decimal(5, 2)
+  maxDrawdown          Decimal?  @map("max_drawdown") @db.Decimal(5, 2)
+  createdAt            DateTime  @default(now()) @map("created_at")
+
+  @@unique([snapshotDate])
+  @@index([snapshotDate(sort: Desc)])
+  @@map("portfolio_snapshots")
+}
+
+// ============================================
+// System Monitoring
+// ============================================
+
+model ScrapingLog {
+  id             Int        @id @default(autoincrement())
+  sourceId       Int?       @map("source_id")
+  startedAt      DateTime   @map("started_at")
+  completedAt    DateTime?  @map("completed_at")
+  articlesFound  Int?       @map("articles_found")
+  articlesSaved  Int?       @map("articles_saved")
+  status         String?    @db.VarChar(20)
+  errorMessage   String?    @map("error_message") @db.Text
+  createdAt      DateTime   @default(now()) @map("created_at")
+
+  // Relations
+  source         NewsSource? @relation(fields: [sourceId], references: [id])
+
+  @@index([startedAt(sort: Desc)])
+  @@map("scraping_logs")
+}

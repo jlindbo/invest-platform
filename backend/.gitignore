@@ -1,0 +1,25 @@
+# Dependencies
+node_modules/
+
+# Environment
+.env
+.env.local
+.env.production
+
+# Logs
+logs/
+*.log
+
+# Build
+dist/
+.tsx-cache/
+
+# Database
+*.db
+*.sqlite
+
+# Prisma
+prisma/migrations/*_migration.sql
+
+# Misc
+.DS_Store

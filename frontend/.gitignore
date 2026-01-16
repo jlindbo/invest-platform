@@ -1,0 +1,22 @@
+# Dependencies
+node_modules/
+
+# Environment
+.env
+.env.local
+.env.production
+
+# Vite
+dist/
+dist-ssr/
+*.local
+
+# Logs
+*.log
+
+# Editor
+.vscode/
+.idea/
+
+# Misc
+.DS_Store
